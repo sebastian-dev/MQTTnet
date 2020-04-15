@@ -1,29 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using MQTTnet.Adapter;
+﻿using MQTTnet.Adapter;
 using MQTTnet.Client.Publishing;
 using MQTTnet.Client.Receiving;
 using MQTTnet.Diagnostics;
 using MQTTnet.Exceptions;
 using MQTTnet.Protocol;
 using MQTTnet.Server.Status;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MQTTnet.Server
 {
     public class MqttServer : IMqttServer
     {
-        private readonly MqttServerEventDispatcher _eventDispatcher;
-        private readonly ICollection<IMqttServerAdapter> _adapters;
-        private readonly IMqttNetChildLogger _logger;
+        readonly MqttServerEventDispatcher _eventDispatcher;
+        readonly ICollection<IMqttServerAdapter> _adapters;
+        readonly IMqttNetLogger _logger;
 
-        private MqttClientSessionsManager _clientSessionsManager;
-        private IMqttRetainedMessagesManager _retainedMessagesManager;
-        private CancellationTokenSource _cancellationTokenSource;
+        MqttClientSessionsManager _clientSessionsManager;
+        IMqttRetainedMessagesManager _retainedMessagesManager;
+        CancellationTokenSource _cancellationTokenSource;
 
-        public MqttServer(IEnumerable<IMqttServerAdapter> adapters, IMqttNetChildLogger logger)
+        public MqttServer(IEnumerable<IMqttServerAdapter> adapters, IMqttNetLogger logger)
         {
             if (adapters == null) throw new ArgumentNullException(nameof(adapters));
             _adapters = adapters.ToList();
@@ -33,6 +33,8 @@ namespace MQTTnet.Server
 
             _eventDispatcher = new MqttServerEventDispatcher(logger.CreateChildLogger(nameof(MqttServerEventDispatcher)));
         }
+
+        public bool IsStarted => _cancellationTokenSource != null;
 
         public IMqttServerStartedHandler StartedHandler { get; set; }
 
@@ -190,9 +192,9 @@ namespace MQTTnet.Server
             return _retainedMessagesManager?.ClearMessagesAsync();
         }
 
-        private Task OnHandleClient(IMqttChannelAdapter channelAdapter)
+        Task OnHandleClient(IMqttChannelAdapter channelAdapter)
         {
-            return _clientSessionsManager.HandleClientAsync(channelAdapter);
+            return _clientSessionsManager.HandleClientConnectionAsync(channelAdapter);
         }
     }
 }
