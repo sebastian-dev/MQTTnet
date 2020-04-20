@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -9,6 +10,8 @@ namespace MQTTnet.Implementations
     public sealed class CrossPlatformSocket : IDisposable
     {
         readonly Socket _socket;
+
+        NetworkStream _networkStream;
 
         public CrossPlatformSocket(AddressFamily addressFamily)
         {
@@ -25,6 +28,7 @@ namespace MQTTnet.Implementations
         public CrossPlatformSocket(Socket socket)
         {
             _socket = socket ?? throw new ArgumentNullException(nameof(socket));
+            _networkStream = new NetworkStream(socket, true);
         }
 
         public bool NoDelay
@@ -137,6 +141,8 @@ namespace MQTTnet.Implementations
 
             try
             {
+                _networkStream?.Dispose();
+
                 // Workaround for: workaround for https://github.com/dotnet/corefx/issues/24430
                 using (cancellationToken.Register(() => _socket.Dispose()))
                 {
@@ -147,6 +153,7 @@ namespace MQTTnet.Implementations
 #else
                     await _socket.ConnectAsync(host, port).ConfigureAwait(false);
 #endif
+                    _networkStream = new NetworkStream(_socket, true);
                 }
             }
             catch (ObjectDisposedException)
@@ -190,11 +197,18 @@ namespace MQTTnet.Implementations
 
         public NetworkStream GetStream()
         {
-            return new NetworkStream(_socket, true);
+            var networkStream = _networkStream;
+            if (networkStream == null)
+            {
+                throw new IOException("The socket is not connected.");
+            }
+
+            return networkStream;
         }
 
         public void Dispose()
         {
+            _networkStream?.Dispose();
             _socket?.Dispose();
         }
 
