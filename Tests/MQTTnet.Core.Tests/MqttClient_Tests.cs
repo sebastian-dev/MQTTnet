@@ -24,6 +24,30 @@ namespace MQTTnet.Tests
         public TestContext TestContext { get; set; }
 
         [TestMethod]
+        [ExpectedException(typeof(MqttCommunicationTimedOutException))]
+        public async Task Connect_To_Invalid_Server_Wrong_IP()
+        {
+            var client = new MqttFactory().CreateMqttClient();
+            await client.ConnectAsync(new MqttClientOptionsBuilder().WithTcpServer("1.2.3.4").WithCommunicationTimeout(TimeSpan.FromSeconds(2)).Build());
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(MqttCommunicationException))]
+        public async Task Connect_To_Invalid_Server_Port_Not_Opened()
+        {
+            var client = new MqttFactory().CreateMqttClient();
+            await client.ConnectAsync(new MqttClientOptionsBuilder().WithTcpServer("127.0.0.1", 12345).WithCommunicationTimeout(TimeSpan.FromSeconds(5)).Build());
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(MqttCommunicationException))]
+        public async Task Connect_To_Invalid_Server_Wrong_Protocol()
+        {
+            var client = new MqttFactory().CreateMqttClient();
+            await client.ConnectAsync(new MqttClientOptionsBuilder().WithTcpServer("http://127.0.0.1", 12345).WithCommunicationTimeout(TimeSpan.FromSeconds(2)).Build());
+        }
+
+        [TestMethod]
         public async Task Send_Manual_Ping()
         {
             using (var testEnvironment = new TestEnvironment(TestContext))
@@ -91,7 +115,13 @@ namespace MQTTnet.Tests
                     }
                 });
 
-                client2.UseApplicationMessageReceivedHandler(async c => { await client2.PublishAsync("reply", null, MqttQualityOfServiceLevel.AtLeastOnce); });
+                client2.UseApplicationMessageReceivedHandler(async c =>
+                {
+                    // Use AtMostOnce here because with QoS 1 or even QoS 2 the process waits for 
+                    // the ACK etc. The problem is that the SpinUntil below only waits until the 
+                    // flag is set. It does not wait until the client has sent the ACK
+                    await client2.PublishAsync("reply", null, MqttQualityOfServiceLevel.AtMostOnce);
+                });
 
                 await client1.PublishAsync("request", null, MqttQualityOfServiceLevel.AtLeastOnce);
 

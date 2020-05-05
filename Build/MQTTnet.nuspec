@@ -3,13 +3,13 @@
   <metadata>
     <id>MQTTnet</id>
     <version>0.0.0</version>
-    <authors>Christian Kratky</authors>
+    <authors>The contributors of MQTTnet</authors>
     <owners>Christian Kratky</owners>
     <license type="file">LICENSE</license>
     <projectUrl>https://github.com/chkr1011/MQTTnet</projectUrl>
     <iconUrl>https://raw.githubusercontent.com/chkr1011/MQTTnet/master/Images/Logo_128x128.png</iconUrl>
-    <icon>images\Logo_128x128.png</icon>
-    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <!-- <icon>images\Logo_128x128.png</icon> -->
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
     <description>MQTTnet is a high performance .NET library for MQTT based communication. It provides a MQTT client and a MQTT server (broker) and supports v3.1.0, v3.1.1 and v5.0.0 of the MQTT protocol.</description>
     <releaseNotes>
 * [Core] Renamed some topic filter relevant classes (BREAKING CHANGE!).
@@ -17,8 +17,12 @@
 * [Client] Added method to trigger PING/PONG manually (connection check etc.).
 * [Client] Added support for certificate validation callback when using Web Sockets (requires netstandard2.1+).
 * [Client] Fixed a memory leak when web socket based connections trying to reconnect with an offline server.
+* [Client] Fixed a memory leak when TCP based connections trying to reconnect with an offline server.
+* [Client] Fixed an issue when connecting to an invalid host (format).
+* [Client] Added support for user properties in CONNECT packet.
 * [ManagedClient] Added method to trigger PING/PONG manually (connection check etc.).
 * [MQTTnet.AspNetCore] improved compatibility with AspNetCore 3.1.
+* [MQTTnet.AspNetCore] Fixed several packaging issues with the Nuget package.
 * [MQTTnet.Server] Fixed wrong version output.
     </releaseNotes>
     <copyright>Copyright Christian Kratky 2016-2020</copyright>

@@ -333,7 +333,7 @@ namespace MQTTnet.Client
 
                 await Task.WhenAll(receiverTask, publishPacketReceiverTask, keepAliveTask).ConfigureAwait(false);
 
-                _publishPacketReceiverQueue.Dispose();
+                _publishPacketReceiverQueue?.Dispose();
             }
             catch (Exception e)
             {
@@ -400,7 +400,7 @@ namespace MQTTnet.Client
                 identifier = packetWithIdentifier.PacketIdentifier.Value;
             }
 
-            using (var packetAwaiter = _packetDispatcher.AddPacketAwaiter<TResponsePacket>(identifier))
+            using (var packetAwaiter = _packetDispatcher.AddAwaiter<TResponsePacket>(identifier))
             {
                 try
                 {
