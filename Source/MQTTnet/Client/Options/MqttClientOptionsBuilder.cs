@@ -40,6 +40,12 @@ namespace MQTTnet.Client.Options
             return this;
         }
 
+        [Obsolete("This method is no longer supported. The client will send ping requests just before the keep alive interval is going to elapse. As per MQTT RFC the serve has to wait 1.5 times the interval so we don't need this anymore.")]
+        public MqttClientOptionsBuilder WithKeepAliveSendInterval(TimeSpan value)
+        {
+            return this;
+        }
+
         public MqttClientOptionsBuilder WithNoKeepAlive()
         {
             return WithKeepAlivePeriod(TimeSpan.Zero);
@@ -48,12 +54,6 @@ namespace MQTTnet.Client.Options
         public MqttClientOptionsBuilder WithKeepAlivePeriod(TimeSpan value)
         {
             _options.KeepAlivePeriod = value;
-            return this;
-        }
-
-        public MqttClientOptionsBuilder WithKeepAliveSendInterval(TimeSpan value)
-        {
-            _options.KeepAliveSendInterval = value;
             return this;
         }
 
@@ -277,7 +277,10 @@ namespace MQTTnet.Client.Options
 #else
                         Certificates = _tlsParameters.Certificates?.ToList(),
 #endif
+#pragma warning disable CS0618 // Type or member is obsolete
                         CertificateValidationCallback = _tlsParameters.CertificateValidationCallback,
+#pragma warning restore CS0618 // Type or member is obsolete
+
                         CertificateValidationHandler = _tlsParameters.CertificateValidationHandler,
                         IgnoreCertificateChainErrors = _tlsParameters.IgnoreCertificateChainErrors,
                         IgnoreCertificateRevocationErrors = _tlsParameters.IgnoreCertificateRevocationErrors

@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace MQTTnet.Implementations
 {
-    public sealed class MqttTcpChannel : IDisposable, IMqttChannel
+    public sealed class MqttTcpChannel : IMqttChannel
     {
         readonly IMqttClientOptions _clientOptions;
         readonly MqttClientTcpOptions _options;
@@ -85,7 +85,12 @@ namespace MQTTnet.Implementations
                     }
                     catch
                     {
+#if NETSTANDARD2_1
+                        await sslStream.DisposeAsync().ConfigureAwait(false);
+#else
                         sslStream.Dispose();
+#endif
+
                         throw;
                     }
 
@@ -115,19 +120,20 @@ namespace MQTTnet.Implementations
         {
             if (buffer is null) throw new ArgumentNullException(nameof(buffer));
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 // Workaround for: https://github.com/dotnet/corefx/issues/24430
                 using (cancellationToken.Register(Dispose))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
                     return await _stream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (ObjectDisposedException)
             {
-                return -1;
+                // Indicate a graceful socket close.
+                return 0;
             }
             catch (IOException exception)
             {
@@ -144,19 +150,18 @@ namespace MQTTnet.Implementations
         {
             if (buffer is null) throw new ArgumentNullException(nameof(buffer));
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 // Workaround for: https://github.com/dotnet/corefx/issues/24430
                 using (cancellationToken.Register(Dispose))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
                     await _stream.WriteAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (ObjectDisposedException)
             {
-                return;
             }
             catch (IOException exception)
             {
@@ -190,15 +195,16 @@ namespace MQTTnet.Implementations
 
         bool InternalUserCertificateValidationCallback(object sender, X509Certificate x509Certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            #region OBSOLETE
+#region OBSOLETE
 
+#pragma warning disable CS0618 // Type or member is obsolete
             var certificateValidationCallback = _options?.TlsOptions?.CertificateValidationCallback;
+#pragma warning restore CS0618 // Type or member is obsolete
             if (certificateValidationCallback != null)
             {
                 return certificateValidationCallback(x509Certificate, chain, sslPolicyErrors, _clientOptions);
             }
-
-            #endregion
+#endregion
 
             var certificateValidationHandler = _options?.TlsOptions?.CertificateValidationHandler;
             if (certificateValidationHandler != null)
@@ -221,7 +227,7 @@ namespace MQTTnet.Implementations
 
             if (chain.ChainStatus.Any(c => c.Status == X509ChainStatusFlags.RevocationStatusUnknown || c.Status == X509ChainStatusFlags.Revoked || c.Status == X509ChainStatusFlags.OfflineRevocation))
             {
-                if (!_options.TlsOptions.IgnoreCertificateRevocationErrors)
+                if (_options?.TlsOptions?.IgnoreCertificateRevocationErrors != true)
                 {
                     return false;
                 }
@@ -229,13 +235,13 @@ namespace MQTTnet.Implementations
 
             if (chain.ChainStatus.Any(c => c.Status == X509ChainStatusFlags.PartialChain))
             {
-                if (!_options.TlsOptions.IgnoreCertificateChainErrors)
+                if (_options?.TlsOptions?.IgnoreCertificateChainErrors != true)
                 {
                     return false;
                 }
             }
 
-            return _options.TlsOptions.AllowUntrustedCertificates;
+            return _options?.TlsOptions?.AllowUntrustedCertificates == true;
         }
 
         X509CertificateCollection LoadCertificates()

@@ -16,16 +16,16 @@ namespace MQTTnet.Adapter
 {
     public sealed class MqttChannelAdapter : Disposable, IMqttChannelAdapter
     {
-        const uint ErrorOperationAborted = 0x800703E3;
-        const int ReadBufferSize = 4096;  // TODO: Move buffer size to config
+        const uint _errorOperationAborted = 0x800703E3;
+        const int _readBufferSize = 4096;  // TODO: Move buffer size to config
 
-        readonly IMqttNetLogger _logger;
+        readonly IMqttNetScopedLogger _logger;
         readonly IMqttChannel _channel;
         readonly MqttPacketReader _packetReader;
 
         readonly byte[] _fixedHeaderBuffer = new byte[2];
 
-        SemaphoreSlim _writerSemaphore = new SemaphoreSlim(1, 1);
+        readonly SemaphoreSlim _writerSemaphore = new SemaphoreSlim(1, 1);
 
         long _bytesReceived;
         long _bytesSent;
@@ -39,7 +39,7 @@ namespace MQTTnet.Adapter
 
             _packetReader = new MqttPacketReader(_channel);
 
-            _logger = logger.CreateChildLogger(nameof(MqttChannelAdapter));
+            _logger = logger.CreateScopedLogger(nameof(MqttChannelAdapter));
         }
 
         public string Endpoint => _channel.Endpoint;
@@ -59,6 +59,7 @@ namespace MQTTnet.Adapter
         public async Task ConnectAsync(TimeSpan timeout, CancellationToken cancellationToken)
         {
             ThrowIfDisposed();
+            cancellationToken.ThrowIfCancellationRequested();
 
             try
             {
@@ -85,6 +86,7 @@ namespace MQTTnet.Adapter
         public async Task DisconnectAsync(TimeSpan timeout, CancellationToken cancellationToken)
         {
             ThrowIfDisposed();
+            cancellationToken.ThrowIfCancellationRequested();
 
             try
             {
@@ -111,7 +113,18 @@ namespace MQTTnet.Adapter
 
         public async Task SendPacketAsync(MqttBasePacket packet, TimeSpan timeout, CancellationToken cancellationToken)
         {
-            await _writerSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            ThrowIfDisposed();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                await _writerSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (ObjectDisposedException)
+            {
+                throw new OperationCanceledException();
+            }
+
             try
             {
                 var packetData = PacketFormatterAdapter.Encode(packet);
@@ -128,8 +141,6 @@ namespace MQTTnet.Adapter
 
                 Interlocked.Add(ref _bytesReceived, packetData.Count);
 
-                PacketFormatterAdapter.FreeBuffer();
-
                 _logger.Verbose("TX ({0} bytes) >>> {1}", packetData.Count, packet);
             }
             catch (Exception exception)
@@ -143,13 +154,23 @@ namespace MQTTnet.Adapter
             }
             finally
             {
-                _writerSemaphore?.Release();
+                PacketFormatterAdapter.FreeBuffer();
+
+                try
+                {
+                    _writerSemaphore.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    throw new OperationCanceledException();
+                }
             }
         }
 
         public async Task<MqttBasePacket> ReceivePacketAsync(TimeSpan timeout, CancellationToken cancellationToken)
         {
             ThrowIfDisposed();
+            cancellationToken.ThrowIfCancellationRequested();
 
             try
             {
@@ -188,6 +209,9 @@ namespace MQTTnet.Adapter
             catch (OperationCanceledException)
             {
             }
+            catch (ObjectDisposedException)
+            {
+            }
             catch (Exception exception)
             {
                 if (IsWrappedException(exception))
@@ -211,10 +235,8 @@ namespace MQTTnet.Adapter
         {
             if (disposing)
             {
-                _channel?.Dispose();
-
-                _writerSemaphore?.Dispose();
-                _writerSemaphore = null;
+                _channel.Dispose();
+                _writerSemaphore.Dispose();
             }
 
             base.Dispose(disposing);
@@ -246,7 +268,7 @@ namespace MQTTnet.Adapter
 
                 var body = new byte[fixedHeader.RemainingLength];
                 var bodyOffset = 0;
-                var chunkSize = Math.Min(ReadBufferSize, fixedHeader.RemainingLength);
+                var chunkSize = Math.Min(_readBufferSize, fixedHeader.RemainingLength);
 
                 do
                 {
@@ -305,7 +327,7 @@ namespace MQTTnet.Adapter
 
             if (exception is COMException comException)
             {
-                if ((uint)comException.HResult == ErrorOperationAborted)
+                if ((uint)comException.HResult == _errorOperationAborted)
                 {
                     throw new OperationCanceledException();
                 }
