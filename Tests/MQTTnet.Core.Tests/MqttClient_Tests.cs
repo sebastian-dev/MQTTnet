@@ -96,7 +96,7 @@ namespace MQTTnet.Tests
         [TestMethod]
         public async Task Send_Reply_In_Message_Handler()
         {
-            using (var testEnvironment = new TestEnvironment(TestContext))
+            using (var testEnvironment = new TestEnvironment())
             {
                 await testEnvironment.StartServerAsync();
                 var client1 = await testEnvironment.ConnectClientAsync();
@@ -124,6 +124,8 @@ namespace MQTTnet.Tests
                 });
 
                 await client1.PublishAsync("request", null, MqttQualityOfServiceLevel.AtLeastOnce);
+
+                await Task.Delay(500);
 
                 SpinWait.SpinUntil(() => replyReceived, TimeSpan.FromSeconds(10));
 
