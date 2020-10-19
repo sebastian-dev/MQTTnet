@@ -163,6 +163,18 @@ namespace MQTTnet.Server
             return this;
         }
 
+        public MqttServerOptionsBuilder WithDisconnectedInterceptor(IMqttServerClientDisconnectedHandler value)
+        {
+            _options.ClientDisconnectedInterceptor = value;
+            return this;
+        }
+
+        public MqttServerOptionsBuilder WithDisconnectedInterceptor(Action<MqttServerClientDisconnectedEventArgs> value)
+        {
+            _options.ClientDisconnectedInterceptor = new MqttServerClientDisconnectedHandlerDelegate(value);
+            return this;
+        }
+
         public MqttServerOptionsBuilder WithApplicationMessageInterceptor(IMqttServerApplicationMessageInterceptor value)
         {
             _options.ApplicationMessageInterceptor = value;
@@ -172,6 +184,18 @@ namespace MQTTnet.Server
         public MqttServerOptionsBuilder WithApplicationMessageInterceptor(Action<MqttApplicationMessageInterceptorContext> value)
         {
             _options.ApplicationMessageInterceptor = new MqttServerApplicationMessageInterceptorDelegate(value);
+            return this;
+        }
+
+        public MqttServerOptionsBuilder WithClientMessageQueueInterceptor(IMqttServerClientMessageQueueInterceptor value)
+        {
+            _options.ClientMessageQueueInterceptor = value;
+            return this;
+        }
+
+        public MqttServerOptionsBuilder WithClientMessageQueueInterceptor(Action<MqttClientMessageQueueInterceptorContext> value)
+        {
+            _options.ClientMessageQueueInterceptor = new MqttClientMessageQueueInterceptorDelegate(value);
             return this;
         }
 
