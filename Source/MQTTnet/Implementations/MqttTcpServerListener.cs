@@ -59,7 +59,7 @@ namespace MQTTnet.Implementations
 
                 _localEndPoint = new IPEndPoint(boundIp, _options.Port);
 
-                _logger.Info($"Starting TCP listener for {_localEndPoint} TLS={_tlsCertificate != null}.");
+                _logger.Info("Starting TCP listener for {0} TLS={1}.", _localEndPoint, _tlsCertificate != null);
 
                 _socket = new CrossPlatformSocket(_addressFamily);
 
@@ -77,8 +77,8 @@ namespace MQTTnet.Implementations
 
                 _socket.Bind(_localEndPoint);
                 _socket.Listen(_options.ConnectionBacklog);
-
-                Task.Run(() => AcceptClientConnectionsAsync(cancellationToken), cancellationToken).Forget(_logger);
+                
+                Task.Run(() => AcceptClientConnectionsAsync(cancellationToken), cancellationToken).RunInBackground(_logger);
 
                 return true;
             }
@@ -115,7 +115,7 @@ namespace MQTTnet.Implementations
                         continue;
                     }
 
-                    Task.Run(() => TryHandleClientConnectionAsync(clientSocket), cancellationToken).Forget(_logger);
+                    Task.Run(() => TryHandleClientConnectionAsync(clientSocket), cancellationToken).RunInBackground(_logger);
                 }
                 catch (OperationCanceledException)
                 {
@@ -131,7 +131,7 @@ namespace MQTTnet.Implementations
                         }
                     }
 
-                    _logger.Error(exception, $"Error while accepting connection at TCP listener {_localEndPoint} TLS={_tlsCertificate != null}.");
+                    _logger.Error(exception, "Error while accepting connection at TCP listener {0} TLS={1}.", _localEndPoint, _tlsCertificate != null);
                     await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -152,9 +152,7 @@ namespace MQTTnet.Implementations
                     _addressFamily == AddressFamily.InterNetwork ? "ipv4" : "ipv6");
 
                 clientSocket.NoDelay = _options.NoDelay;
-
                 stream = clientSocket.GetStream();
-
                 X509Certificate2 clientCertificate = null;
 
                 if (_tlsCertificate != null)
@@ -208,17 +206,17 @@ namespace MQTTnet.Implementations
                 {
                     stream?.Dispose();
                     clientSocket?.Dispose();
-
-                    _logger.Verbose("Client '{0}' disconnected at TCP listener '{1}, {2}'.",
-                        remoteEndPoint,
-                        _localEndPoint,
-                        _addressFamily == AddressFamily.InterNetwork ? "ipv4" : "ipv6");
                 }
                 catch (Exception disposeException)
                 {
                     _logger.Error(disposeException, "Error while cleaning up client connection");
                 }
             }
+
+            _logger.Verbose("Client '{0}' disconnected at TCP listener '{1}, {2}'.",
+                remoteEndPoint,
+                _localEndPoint,
+                _addressFamily == AddressFamily.InterNetwork ? "ipv4" : "ipv6");
         }
     }
 }

@@ -58,6 +58,15 @@ namespace MQTTnet.Formatter.V5
             };
         }
 
+        public MqttBasePacket CreatePubRecPacket(MqttPublishPacket publishPacket)
+        {
+            return new MqttPubRecPacket
+            {
+                PacketIdentifier = publishPacket.PacketIdentifier,
+                ReasonCode = MqttPubRecReasonCode.Success
+            };
+        }
+
         public MqttApplicationMessage CreateApplicationMessage(MqttPublishPacket publishPacket)
         {
             return new MqttApplicationMessage
@@ -93,6 +102,7 @@ namespace MQTTnet.Formatter.V5
                 MaximumPacketSize = connAckPacket.Properties?.MaximumPacketSize,
                 ReasonString = connAckPacket.Properties?.ReasonString,
                 ReceiveMaximum = connAckPacket.Properties?.ReceiveMaximum,
+                MaximumQoS = connAckPacket.Properties?.MaximumQoS ?? MqttQualityOfServiceLevel.ExactlyOnce,
                 ResponseInformation = connAckPacket.Properties?.ResponseInformation,
                 TopicAliasMaximum = connAckPacket.Properties?.TopicAliasMaximum,
                 ServerReference = connAckPacket.Properties?.ServerReference,
@@ -143,7 +153,8 @@ namespace MQTTnet.Formatter.V5
                     AuthenticationMethod = connectionValidatorContext.AuthenticationMethod,
                     AuthenticationData = connectionValidatorContext.ResponseAuthenticationData,
                     AssignedClientIdentifier = connectionValidatorContext.AssignedClientIdentifier,
-                    ReasonString = connectionValidatorContext.ReasonString
+                    ReasonString = connectionValidatorContext.ReasonString,
+                    TopicAliasMaximum = ushort.MaxValue
                 }
             };
         }
@@ -200,6 +211,18 @@ namespace MQTTnet.Formatter.V5
             return packet;
         }
 
+        public MqttSubAckPacket CreateSubAckPacket(MqttSubscribePacket subscribePacket, Server.MqttClientSubscribeResult subscribeResult)
+        {
+            var subackPacket = new MqttSubAckPacket
+            {
+                PacketIdentifier = subscribePacket.PacketIdentifier
+            };
+
+            subackPacket.ReasonCodes.AddRange(subscribeResult.ReasonCodes);
+
+            return subackPacket;
+        }
+
         public MqttUnsubscribePacket CreateUnsubscribePacket(MqttClientUnsubscribeOptions options)
         {
             if (options == null) throw new ArgumentNullException(nameof(options));
@@ -213,6 +236,15 @@ namespace MQTTnet.Formatter.V5
             packet.Properties.UserProperties = options.UserProperties;
 
             return packet;
+        }
+
+        public MqttUnsubAckPacket CreateUnsubAckPacket(MqttUnsubscribePacket unsubscribePacket, List<MqttUnsubscribeReasonCode> reasonCodes)
+        {
+            return new MqttUnsubAckPacket
+            {
+                PacketIdentifier = unsubscribePacket.PacketIdentifier,
+                ReasonCodes = reasonCodes
+            };
         }
 
         public MqttDisconnectPacket CreateDisconnectPacket(MqttClientDisconnectOptions options)

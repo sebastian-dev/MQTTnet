@@ -48,7 +48,7 @@ namespace MQTTnet.Implementations
 
             if (options.TlsEndpointOptions.IsEnabled)
             {
-                throw new NotSupportedException("TLS servers are not supported for UWP apps.");
+                throw new NotSupportedException("TLS servers are not supported when using 'uap10.0'.");
             }
         }
 
@@ -113,7 +113,7 @@ namespace MQTTnet.Implementations
                 }
                 catch (Exception exception)
                 { 
-                    _logger.Error(exception, "Error while cleaning up client connection");
+                    _logger.Error(exception, "Error while cleaning up client connection.");
                 }
             }
         }

@@ -15,6 +15,10 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MQTTnet.Client.Receiving;
+using MQTTnet.Diagnostics;
+using MQTTnet.Extensions.ManagedClient;
+using MQTTnet.Formatter;
 
 namespace MQTTnet.Tests
 {
@@ -149,10 +153,13 @@ namespace MQTTnet.Tests
 
                 client2.UseApplicationMessageReceivedHandler(async c =>
                 {
-                    // Use AtMostOnce here because with QoS 1 or even QoS 2 the process waits for 
-                    // the ACK etc. The problem is that the SpinUntil below only waits until the 
-                    // flag is set. It does not wait until the client has sent the ACK
-                    await client2.PublishAsync("reply", null, MqttQualityOfServiceLevel.AtMostOnce);
+                    if (c.ApplicationMessage.Topic == "request")
+                    {
+                        // Use AtMostOnce here because with QoS 1 or even QoS 2 the process waits for 
+                        // the ACK etc. The problem is that the SpinUntil below only waits until the 
+                        // flag is set. It does not wait until the client has sent the ACK
+                        await client2.PublishAsync("reply", null, MqttQualityOfServiceLevel.AtMostOnce);
+                    }
                 });
 
                 await client1.PublishAsync("request", null, MqttQualityOfServiceLevel.AtLeastOnce);
@@ -160,6 +167,8 @@ namespace MQTTnet.Tests
                 await Task.Delay(500);
 
                 SpinWait.SpinUntil(() => replyReceived, TimeSpan.FromSeconds(10));
+
+                await Task.Delay(500);
 
                 Assert.IsTrue(replyReceived);
             }
@@ -739,6 +748,42 @@ namespace MQTTnet.Tests
                 Assert.IsNotNull(receivedMessage);
                 Assert.AreEqual("A", receivedMessage.Topic);
                 Assert.AreEqual(null, receivedMessage.Payload);
+            }
+        }
+
+        [TestMethod]
+        public async Task Subscribe_With_QoS2()
+        {
+            using (var testEnvironment = new TestEnvironment())
+            {
+                await testEnvironment.StartServerAsync();
+                var client1 = await testEnvironment.ConnectClientAsync(o => o.WithProtocolVersion(MqttProtocolVersion.V500));
+                var client2 = await testEnvironment.ConnectClientAsync(o => o.WithProtocolVersion(MqttProtocolVersion.V500));
+
+                var disconnectedFired = false;
+                client1.DisconnectedHandler = new MqttClientDisconnectedHandlerDelegate(c =>
+                {
+                    disconnectedFired = true;
+                });
+
+                var messageReceived = false;
+                client1.ApplicationMessageReceivedHandler = new MqttApplicationMessageReceivedHandlerDelegate(c =>
+                {
+                    messageReceived = true;
+                });
+
+                await client1.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic("topic1").WithExactlyOnceQoS().Build());
+
+                await Task.Delay(500);
+
+                var message = new MqttApplicationMessageBuilder().WithTopic("topic1").WithPayload("Hello World").WithExactlyOnceQoS().WithRetainFlag().Build();
+                
+                await client2.PublishAsync(message);
+                await Task.Delay(500);
+
+                Assert.IsTrue(messageReceived);
+                Assert.IsTrue(client1.IsConnected);
+                Assert.IsFalse(disconnectedFired);
             }
         }
     }

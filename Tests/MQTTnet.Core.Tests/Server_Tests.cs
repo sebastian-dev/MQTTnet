@@ -6,22 +6,22 @@ using MQTTnet.Client.Disconnecting;
 using MQTTnet.Client.Options;
 using MQTTnet.Client.Receiving;
 using MQTTnet.Client.Subscribing;
-using MQTTnet.Implementations;
 using MQTTnet.Protocol;
 using MQTTnet.Server;
 using MQTTnet.Tests.Mockups;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MQTTnet.Diagnostics;
+using MQTTnet.Formatter;
 
 namespace MQTTnet.Tests
 {
     [TestClass]
-    public class Server_Tests
+    public sealed class Server_Tests
     {
         public TestContext TestContext { get; set; }
 
@@ -304,7 +304,7 @@ namespace MQTTnet.Tests
                     await c2.PublishAsync(messageBuilder.Build()).ConfigureAwait(false);
                 }
 
-                SpinWait.SpinUntil(() => receivedMessagesCount == 500, 5000);
+                SpinWait.SpinUntil(() => receivedMessagesCount == 500, TimeSpan.FromSeconds(20));
 
                 Assert.AreEqual(500, receivedMessagesCount);
             }
@@ -331,7 +331,7 @@ namespace MQTTnet.Tests
 
                     await Task.Delay(10);
                 }
-                
+
                 var c2 = await testEnvironment.ConnectClientAsync();
 
                 var messageBuilder = new MqttApplicationMessageBuilder();
@@ -416,33 +416,27 @@ namespace MQTTnet.Tests
         public async Task Publish_Multiple_Clients()
         {
             var receivedMessagesCount = 0;
-            var locked = new object();
-
+            
             using (var testEnvironment = new TestEnvironment(TestContext))
             {
                 await testEnvironment.StartServerAsync();
 
                 var c1 = await testEnvironment.ConnectClientAsync();
                 var c2 = await testEnvironment.ConnectClientAsync();
-
-                c1.UseApplicationMessageReceivedHandler(c =>
-                {
-                    lock (locked)
-                    {
-                        receivedMessagesCount++;
-                    }
-                });
+                var c3 = await testEnvironment.ConnectClientAsync();
 
                 c2.UseApplicationMessageReceivedHandler(c =>
                 {
-                    lock (locked)
-                    {
-                        receivedMessagesCount++;
-                    }
+                    Interlocked.Increment(ref receivedMessagesCount);
                 });
 
-                await c1.SubscribeAsync(new MqttTopicFilter { Topic = "a", QualityOfServiceLevel = MqttQualityOfServiceLevel.AtLeastOnce }).ConfigureAwait(false);
+                c3.UseApplicationMessageReceivedHandler(c =>
+                {
+                    Interlocked.Increment(ref receivedMessagesCount);
+                });
+
                 await c2.SubscribeAsync(new MqttTopicFilter { Topic = "a", QualityOfServiceLevel = MqttQualityOfServiceLevel.AtLeastOnce }).ConfigureAwait(false);
+                await c3.SubscribeAsync(new MqttTopicFilter { Topic = "a", QualityOfServiceLevel = MqttQualityOfServiceLevel.AtLeastOnce }).ConfigureAwait(false);
 
                 var message = new MqttApplicationMessageBuilder().WithTopic("a").WithAtLeastOnceQoS().Build();
 
@@ -451,8 +445,8 @@ namespace MQTTnet.Tests
                     await c1.PublishAsync(message).ConfigureAwait(false);
                 }
 
-                await Task.Delay(5000);
-
+                SpinWait.SpinUntil(() => receivedMessagesCount == 1000, TimeSpan.FromSeconds(20));
+                
                 Assert.AreEqual(1000, receivedMessagesCount);
             }
         }
@@ -466,16 +460,25 @@ namespace MQTTnet.Tests
 
                 var options = new MqttClientOptionsBuilder()
                     .WithCleanSession(false)
+                    .WithProtocolVersion(MqttProtocolVersion.V500) // Disconnect reason is only available in MQTT 5+
                     .WithClientId("a");
 
                 var client1 = await testEnvironment.ConnectClientAsync(options);
                 await Task.Delay(500);
+
+                MqttClientDisconnectReason disconnectReason = MqttClientDisconnectReason.NormalDisconnection;
+                client1.DisconnectedHandler = new MqttClientDisconnectedHandlerDelegate(c =>
+                {
+                    disconnectReason = c.Reason;
+                });
 
                 var client2 = await testEnvironment.ConnectClientAsync(options);
                 await Task.Delay(500);
 
                 Assert.IsFalse(client1.IsConnected);
                 Assert.IsTrue(client2.IsConnected);
+
+                Assert.AreEqual(MqttClientDisconnectReason.SessionTakenOver, disconnectReason);
             }
         }
 
@@ -646,11 +649,11 @@ namespace MQTTnet.Tests
                             {
                                 // Clear retained message.
                                 await client.PublishAsync(new MqttApplicationMessageBuilder().WithTopic("r" + i2)
-                                    .WithPayload(new byte[0]).WithRetainFlag().Build());
+                                    .WithPayload(new byte[0]).WithRetainFlag().WithQualityOfServiceLevel(1).Build());
 
                                 // Set retained message.
                                 await client.PublishAsync(new MqttApplicationMessageBuilder().WithTopic("r" + i2)
-                                    .WithPayload("value").WithRetainFlag().Build());
+                                    .WithPayload("value").WithRetainFlag().WithQualityOfServiceLevel(1).Build());
 
                                 await client.DisconnectAsync();
                             }
@@ -660,6 +663,8 @@ namespace MQTTnet.Tests
                             testEnvironment2.TrackException(exception);
                         }
                     }));
+
+                    await Task.Delay(10);
                 }
 
                 await Task.WhenAll(tasks);
@@ -948,7 +953,8 @@ namespace MQTTnet.Tests
 
                 byte[] receivedBody = null;
 
-                await testEnvironment.StartServerAsync(new MqttServerOptionsBuilder());
+                await testEnvironment.StartServerAsync();
+
                 var client1 = await testEnvironment.ConnectClientAsync();
                 client1.UseApplicationMessageReceivedHandler(c =>
                 {
@@ -960,7 +966,7 @@ namespace MQTTnet.Tests
                 var client2 = await testEnvironment.ConnectClientAsync();
                 await client2.PublishAsync("string", longBody);
 
-                await Task.Delay(500);
+                await Task.Delay(TimeSpan.FromSeconds(5));
 
                 Assert.IsTrue(longBody.SequenceEqual(receivedBody ?? new byte[0]));
             }
@@ -1220,68 +1226,6 @@ namespace MQTTnet.Tests
         }
 
         [TestMethod]
-        public async Task Close_Idle_Connection()
-        {
-            using (var testEnvironment = new TestEnvironment(TestContext))
-            {
-                await testEnvironment.StartServerAsync(new MqttServerOptionsBuilder().WithDefaultCommunicationTimeout(TimeSpan.FromSeconds(1)));
-
-                var client = new CrossPlatformSocket(AddressFamily.InterNetwork);
-                await client.ConnectAsync("localhost", testEnvironment.ServerPort, CancellationToken.None);
-
-                // Don't send anything. The server should close the connection.
-                await Task.Delay(TimeSpan.FromSeconds(3));
-
-                try
-                {
-                    var receivedBytes = await client.ReceiveAsync(new ArraySegment<byte>(new byte[10]), SocketFlags.Partial);
-                    if (receivedBytes == 0)
-                    {
-                        return;
-                    }
-
-                    Assert.Fail("Receive should throw an exception.");
-                }
-                catch (SocketException)
-                {
-                }
-            }
-        }
-
-        [TestMethod]
-        public async Task Send_Garbage()
-        {
-            using (var testEnvironment = new TestEnvironment(TestContext))
-            {
-                await testEnvironment.StartServerAsync(new MqttServerOptionsBuilder().WithDefaultCommunicationTimeout(TimeSpan.FromSeconds(1)));
-
-                // Send an invalid packet and ensure that the server will close the connection and stay in a waiting state
-                // forever. This is security related.
-                var client = new CrossPlatformSocket(AddressFamily.InterNetwork);
-                await client.ConnectAsync("localhost", testEnvironment.ServerPort, CancellationToken.None);
-
-                var buffer = Encoding.UTF8.GetBytes("Garbage");
-                await client.SendAsync(new ArraySegment<byte>(buffer), SocketFlags.None);
-
-                await Task.Delay(TimeSpan.FromSeconds(3));
-
-                try
-                {
-                    var receivedBytes = await client.ReceiveAsync(new ArraySegment<byte>(new byte[10]), SocketFlags.Partial);
-                    if (receivedBytes == 0)
-                    {
-                        return;
-                    }
-
-                    Assert.Fail("Receive should throw an exception.");
-                }
-                catch (SocketException)
-                {
-                }
-            }
-        }
-
-        [TestMethod]
         public async Task Do_Not_Send_Retained_Messages_For_Denied_Subscription()
         {
             using (var testEnvironment = new TestEnvironment(TestContext))
@@ -1359,7 +1303,7 @@ namespace MQTTnet.Tests
             }
         }
 
-        private static async Task TestPublishAsync(
+        static async Task TestPublishAsync(
             string topic,
             MqttQualityOfServiceLevel qualityOfServiceLevel,
             string topicFilter,
@@ -1371,7 +1315,7 @@ namespace MQTTnet.Tests
             {
                 var receivedMessagesCount = 0;
 
-                await testEnvironment.StartServerAsync(new MqttServerOptionsBuilder());
+                await testEnvironment.StartServerAsync();
 
                 var c1 = await testEnvironment.ConnectClientAsync(new MqttClientOptionsBuilder().WithClientId("receiver"));
                 c1.UseApplicationMessageReceivedHandler(c => Interlocked.Increment(ref receivedMessagesCount));
@@ -1471,7 +1415,7 @@ namespace MQTTnet.Tests
 
                 await client.SubscribeAsync(topic, MqttQualityOfServiceLevel.AtLeastOnce);
 
-                await client.PublishAsync(new MqttApplicationMessage{ Topic = topic, QualityOfServiceLevel = MqttQualityOfServiceLevel.AtMostOnce });
+                await client.PublishAsync(new MqttApplicationMessage { Topic = topic, QualityOfServiceLevel = MqttQualityOfServiceLevel.AtMostOnce });
 
                 await Task.Delay(500);
 

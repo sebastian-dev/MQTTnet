@@ -19,7 +19,7 @@ MQTTnet is a high performance .NET library for MQTT based communication. It prov
 ### General
 
 * Async support
-* TLS 1.2 support for client and server (but not UWP servers)
+* TLS support for client and server (but not UWP servers)
 * Extensible communication channels (e.g. In-Memory, TCP, TCP+TLS, WS)
 * Lightweight (only the low level implementation of MQTT, no overhead)
 * Performance optimized (processing ~70.000 messages / second)*
@@ -100,6 +100,7 @@ This library is used in the following projects:
 * Azure Functions MQTT Bindings, [CaseOnline.Azure.WebJobs.Extensions.Mqtt](https://github.com/keesschollaart81/CaseOnline.Azure.WebJobs.Extensions.Mqtt/)
 * HA4IoT (Open Source Home Automation system for .NET, <https://github.com/chkr1011/HA4IoT>)
 * MQTT Client Rx (Wrapper for Reactive Extensions, <https://github.com/1iveowl/MQTTClient.rx>)
+* MQTT Client Rx (Managed Client Wrapper for Reactive Extensions, <https://github.com/mmuecke/RxMQTTnet>)
 * MQTT Tester (MQTT client test app for [Android](https://play.google.com/store/apps/details?id=com.liveowl.mqtttester) and [iOS](https://itunes.apple.com/us/app/mqtt-tester/id1278621826?mt=8))
 * Wirehome.Core (Open Source Home Automation system for .NET Core, <https://github.com/chkr1011/Wirehome.Core>)
 

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -101,6 +102,16 @@ namespace MQTTnet
         {
             _qualityOfServiceLevel = qualityOfServiceLevel;
             return this;
+        }
+
+        public MqttApplicationMessageBuilder WithQualityOfServiceLevel(int qualityOfServiceLevel)
+        {
+            if (qualityOfServiceLevel < 0 || qualityOfServiceLevel > 2)
+            {
+                throw new ArgumentOutOfRangeException(nameof(qualityOfServiceLevel));
+            }
+
+            return WithQualityOfServiceLevel((MqttQualityOfServiceLevel)qualityOfServiceLevel);
         }
 
         public MqttApplicationMessageBuilder WithRetainFlag(bool value = true)
@@ -211,9 +222,14 @@ namespace MQTTnet
 
         public MqttApplicationMessage Build()
         {
-            if (string.IsNullOrEmpty(_topic))
+            if (!_topicAlias.HasValue && string.IsNullOrEmpty(_topic))
             {
-                throw new MqttProtocolViolationException("Topic is not set.");
+                throw new MqttProtocolViolationException("Topic or TopicAlias is not set.");
+            }
+
+            if (_topicAlias == 0)
+            {
+                throw new MqttProtocolViolationException("A Topic Alias of 0 is not permitted. A sender MUST NOT send a PUBLISH packet containing a Topic Alias which has the value 0 [MQTT-3.3.2-8].");
             }
 
             var applicationMessage = new MqttApplicationMessage

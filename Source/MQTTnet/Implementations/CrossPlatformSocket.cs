@@ -33,6 +33,9 @@ namespace MQTTnet.Implementations
 
         public bool NoDelay
         {
+            // We cannot use the _NoDelay_ property from the socket because there is an issue in .NET 4.5.2, 4.6.
+            // The decompiled code is: this.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.Debug, value ? 1 : 0);
+            // Which is wrong because the "NoDelay" should be set and not "Debug".
             get => (int)_socket.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.NoDelay) > 0;
             set => _socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.NoDelay, value ? 1 : 0);
         }
@@ -69,11 +72,10 @@ namespace MQTTnet.Implementations
             {
 #if NET452 || NET461
                 var clientSocket = await Task.Factory.FromAsync(_socket.BeginAccept, _socket.EndAccept, null).ConfigureAwait(false);
-                return new CrossPlatformSocket(clientSocket);
 #else
                 var clientSocket = await _socket.AcceptAsync().ConfigureAwait(false);
-                return new CrossPlatformSocket(clientSocket);
 #endif
+                return new CrossPlatformSocket(clientSocket);
             }
             catch (ObjectDisposedException)
             {
