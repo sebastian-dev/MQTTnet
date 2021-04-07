@@ -252,7 +252,11 @@ namespace MQTTnet.Client.Options
         {
             if (optionsBuilder == null) throw new ArgumentNullException(nameof(optionsBuilder));
 
-            _tlsParameters = new MqttClientOptionsBuilderTlsParameters();
+            _tlsParameters = new MqttClientOptionsBuilderTlsParameters
+            {
+                UseTls = true
+            };
+            
             optionsBuilder(_tlsParameters);
             return this;
         }
@@ -287,7 +291,7 @@ namespace MQTTnet.Client.Options
 #pragma warning disable CS0618 // Type or member is obsolete
                         CertificateValidationCallback = _tlsParameters.CertificateValidationCallback,
 #pragma warning restore CS0618 // Type or member is obsolete
-#if NETCOREAPP3_1
+#if NETCOREAPP3_1 || NET5_0
                         ApplicationProtocols = _tlsParameters.ApplicationProtocols,
 #endif
                         CertificateValidationHandler = _tlsParameters.CertificateValidationHandler,
